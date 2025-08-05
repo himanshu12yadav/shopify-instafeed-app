@@ -1,0 +1,362 @@
+
+{{ 'instagram-feed.css' | asset_url | stylesheet_tag }}
+
+
+<div class="instagram-feed-wrapper" data-section-id="{{ block.id }}">
+    <div class="instagram-feed" id="instafeed-block" data-proxy-url="/apps/instafeed?dataset">
+        {% if block.settings.title != blank %}
+            <div class="feed-header">
+                <h2 class="feed-title">{{ block.settings.title }}</h2>
+                {% if block.settings.subtitle != blank %}
+                    <p class="feed-subtitle">{{ block.settings.subtitle }}</p>
+                {% endif %}
+            </div>
+        {% endif %}
+
+        <div class="loading-container" id="loading-container">
+            <div class="loading-spinner"></div>
+            <p class="loading-text">Loading Instagram posts...</p>
+        </div>
+
+        <div class="instagram-grid" id="instagram-grid" role="feed" aria-label="Instagram posts" data-grid-columns="{{ block.settings.grid_columns | default: '3' }}"></div>
+
+
+        {% if block.settings.show_view_more %}
+            <div class="view-more-container">
+                <a href="{{ block.settings.instagram_url | default: '#' }}"
+                   class="view-more-btn"
+                   target="_blank"
+                   rel="noopener noreferrer">
+                    View More on Instagram
+                </a>
+            </div>
+        {% endif %}
+    </div>
+</div>
+
+{% style %}
+
+    .instagram-grid {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    }
+
+
+    .instagram-grid[data-grid-columns="2"] {
+    grid-template-columns: repeat(2, 1fr);
+    }
+
+    .instagram-grid[data-grid-columns="3"] {
+    grid-template-columns: repeat(3, 1fr);
+    }
+
+    .instagram-grid[data-grid-columns="4"] {
+    grid-template-columns: repeat(4, 1fr);
+    }
+
+    /* Mobile responsiveness for different column counts */
+    @media (max-width: 768px) {
+    .instagram-grid[data-grid-columns="4"] {
+    grid-template-columns: repeat(2, 1fr);
+    }
+
+    .instagram-grid[data-grid-columns="3"] {
+    grid-template-columns: repeat(2, 1fr);
+    }
+    }
+
+    @media (max-width: 480px) {
+    .instagram-grid[data-grid-columns="2"],
+    .instagram-grid[data-grid-columns="3"],
+    .instagram-grid[data-grid-columns="4"] {
+    grid-template-columns: 1fr;
+    }
+    }
+
+    /* Apply custom colors if set */
+    {% if block.settings.background_color != blank %}
+        .instagram-feed {
+        background-color: {{ block.settings.background_color }};
+        }
+    {% endif %}
+
+    {% if block.settings.text_color != blank %}
+        .feed-title,
+        .username,
+        .caption {
+        color: {{ block.settings.text_color }};
+        }
+    {% endif %}
+
+
+{% endstyle %}
+
+
+<script>
+    document.addEventListener('DOMContentLoaded', async function() {
+        const container = document.getElementById('instafeed-block');
+        const grid = document.getElementById('instagram-grid');
+        const loadingContainer = document.getElementById('loading-container');
+        const proxyUrl = container.dataset.proxyUrl;
+
+        // Helper function to format timestamp
+        function formatTimestamp(timestamp) {
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffTime = Math.abs(now - date);
+            const diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24));
+
+            if (diffDays === 0) return 'Today';
+            if (diffDays === 1) return 'Yesterday';
+            if (diffDays < 7) return `${diffDays} days ago`;
+            if (diffDays < 30) return `${Math.floor(diffDays / 7)} weeks ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Helper function to truncate caption
+        function truncateCaption(caption, maxLength = 100) {
+            if (!caption) return '';
+            return caption.length > maxLength ? caption.substring(0, maxLength) + '...' : caption;
+        }
+
+        try {
+            const response = await fetch(proxyUrl);
+            const responseJSON = await response.json();
+
+            // Hide loading spinner
+            loadingContainer.style.display = 'none';
+
+            // Check if subscription is active
+            if (!responseJSON.isSubscribe) {
+                grid.innerHTML = `
+          <div class="subscription-required">
+            <h3>Premium Feature</h3>
+            <p>Upgrade to display your Instagram feed and connect with your audience.</p>
+            <a href="/admin/apps/instafeed/subscription" class="subscribe-btn">Upgrade Now</a>
+          </div>
+        `;
+                return;
+            }
+
+            // Process Instagram feed data
+            const { posts: feedData } = responseJSON;
+
+            if (feedData.error) {
+                throw new Error(feedData.error);
+            }
+
+            if (!feedData || feedData.length === 0) {
+                grid.innerHTML = `
+          <div class="empty-state">
+            <h3>No posts found</h3>
+            <p>Connect your Instagram account to start displaying your posts.</p>
+          </div>
+        `;
+                return;
+            }
+
+            // Render Instagram posts
+            const postsHtml = feedData.map(post => `
+        <article class="instagram-post"
+                 role="article"
+                 tabindex="0"
+                 aria-label="Instagram post by ${post.username || 'user'}"
+                 onclick="window.open('${post.permalink}', '_blank', 'noopener,noreferrer')">
+          <div class="media-container">
+            ${post.mediaType === 'VIDEO' ? `
+              <video src="${post.mediaUrl}"
+                     poster="${post.thumbnailUrl}"
+                     muted
+                     loop
+                     preload="metadata"
+                     aria-label="Video post">
+              </video>
+              <div class="media-type-indicator">Video</div>
+              <div class="play-button" aria-hidden="true"></div>
+            ` : `
+              <img src="${post.thumbnailUrl || post.mediaUrl}"
+                   alt="${truncateCaption(post.caption) || 'Instagram post'}"
+                   loading="lazy">
+              <div class="media-type-indicator">Photo</div>
+            `}
+          </div>
+          <div class="post-info">
+            <div class="username">${post.username || 'instagram'}</div>
+            ${post.caption ? `<div class="caption">${truncateCaption(post.caption)}</div>` : ''}
+            
+            <!-- Add products section -->
+            ${post.products && post.products.length > 0 ? `
+              <div class="post-products">
+                <h4>Shop This Post</h4>
+                <div class="products-grid">
+                  ${post.products.map(product => `
+                    <a href="/products/${product.handle}" class="product-link" onclick="event.stopPropagation()">
+                      ${product.image ? `<img src="${product.image}" alt="${product.title}" class="product-image">` : ''}
+                      <div class="product-info">
+                        <span class="product-title">${product.title}</span>
+                        ${product.price ? `<span class="product-price">${product.price}</span>` : ''}
+                      </div>
+                    </a>
+                  `).join('')}
+                </div>
+              </div>
+            ` : ''}
+            
+            <div class="post-actions">
+              <time class="timestamp" datetime="${post.timestamp}">
+                ${formatTimestamp(post.timestamp)}
+              </time>
+              <a href="${post.permalink}"
+                 class="view-post-btn"
+                 target="_blank"
+                 rel="noopener noreferrer"
+                 onclick="event.stopPropagation()">
+                View Post
+              </a>
+            </div>
+          </div>
+        </article>
+      `).join('');
+
+            grid.innerHTML = postsHtml;
+
+            // Add keyboard navigation
+            const posts = grid.querySelectorAll('.instagram-post');
+            posts.forEach(post => {
+                post.addEventListener('keydown', (e) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        post.click();
+                    }
+                });
+            });
+
+            // Add video hover play functionality
+            const videos = grid.querySelectorAll('video');
+            videos.forEach(video => {
+                const post = video.closest('.instagram-post');
+                post.addEventListener('mouseenter', () => {
+                    video.play().catch(() => {
+                        // Ignore autoplay failures
+                    });
+                });
+                post.addEventListener('mouseleave', () => {
+                    video.pause();
+                    video.currentTime = 0;
+                });
+            });
+
+        } catch (feedError) {
+            console.error('Instagram feed error:', feedError);
+            loadingContainer.style.display = 'none';
+
+            let errorMessage = 'Unable to load Instagram feed. Please try again later.';
+
+            if (feedError.message.includes('401') || feedError.message.includes('403')) {
+                errorMessage = 'Authentication error. Please reconnect your Instagram account.';
+            } else if (feedError.message.includes('429')) {
+                errorMessage = 'Rate limit exceeded. Please try again later.';
+            } else if (feedError.message.includes('subscription')) {
+                grid.innerHTML = `
+          <div class="subscription-required">
+            <h3>Premium Feature</h3>
+            <p>Upgrade to display your Instagram feed and connect with your audience.</p>
+            <a href="/admin/apps/instafeed/subscription" class="subscribe-btn">Upgrade Now</a>
+          </div>
+        `;
+                return;
+            }
+
+            grid.innerHTML = `<div class="error-message">${errorMessage}</div>`;
+        }
+    });
+</script>
+
+
+{% schema %}
+{
+  "name": "Instagram Feed",
+  "target": "section",
+  "settings": [
+    {
+      "type": "header",
+      "content": "Feed Settings"
+    },
+    {
+      "type": "text",
+      "id": "title",
+      "label": "Heading",
+      "default": "Follow us on Instagram",
+      "info": "Leave blank to hide the heading"
+    },
+    {
+      "type": "text",
+      "id": "subtitle",
+      "label": "Subtitle",
+      "default": "Stay updated with our latest posts",
+      "info": "Optional subtitle text"
+    },
+    {
+      "type": "header",
+      "content": "Display Options"
+    },
+    {
+      "type": "range",
+      "id": "posts_limit",
+      "label": "Number of posts to show",
+      "min": 3,
+      "max": 12,
+      "step": 1,
+      "default": 6
+    },
+    {
+      "type": "checkbox",
+      "id": "show_view_more",
+      "label": "Show 'View More' button",
+      "default": true
+    },
+    {
+      "type": "url",
+      "id": "instagram_url",
+      "label": "Instagram profile URL",
+      "info": "Link for the 'View More' button"
+    },
+    {
+      "type": "header",
+      "content": "Styling"
+    },
+    {
+      "type": "select",
+      "id": "grid_columns",
+      "label": "Posts per row (desktop)",
+      "options": [
+        {
+          "value": "2",
+          "label": "2 columns"
+        },
+        {
+          "value": "3",
+          "label": "3 columns"
+        },
+        {
+          "value": "4",
+          "label": "4 columns"
+        }
+      ],
+      "default": "3"
+    },
+    {
+      "type": "color",
+      "id": "background_color",
+      "label": "Background color",
+      "default": "#ffffff"
+    },
+    {
+      "type": "color",
+      "id": "text_color",
+      "label": "Text color",
+      "default": "#111827"
+    }
+  ]
+}
+
+{% endschema %}

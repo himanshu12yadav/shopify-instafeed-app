@@ -1,0 +1,50 @@
+# Learn more about configuring your app at https://shopify.dev/docs/apps/tools/cli/configuration
+
+application_url = "https://instagramfeed-app.sprinix.com"
+client_id = "9d193f98bac5c4f538958ba291fee5cd"
+embedded = true
+handle = "instafeed-06-14-25"
+name = "instafeed"
+
+[webhooks]
+api_version = "2025-01"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/uninstalled" ]
+  uri = "/webhooks/app/uninstalled"
+
+  [[webhooks.subscriptions]]
+  topics = [ "app/scopes_update" ]
+  uri = "/webhooks/app/scopes_update"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = [ "customers/data_request", "customers/redact", "shop/redact" ]
+  uri = "/webhooks/"
+
+
+
+
+[access_scopes]
+# Learn more at https://shopify.dev/docs/apps/tools/cli/configuration#access_scopes
+scopes = "write_products"
+
+[auth]
+redirect_urls = [
+  "https://instagramfeed-app.sprinix.com/auth/callback",
+  "https://instagramfeed-app.sprinix.com/auth/shopify/callback",
+  "https://instagramfeed-app.sprinix.com/api/auth/callback",
+  "https://instagramfeed-app.sprinix.com/auth/instagram/callback"
+]
+
+[app_proxy]
+url = "https://instagramfeed-app.sprinix.com/proxy/handler"
+subpath = "instafeed"
+prefix = "apps"
+
+[pos]
+embedded = false
+
+[build]
+automatically_update_urls_on_dev = true
+dev_store_url = "sprinix-store.myshopify.com"
+include_config_on_deploy = true
